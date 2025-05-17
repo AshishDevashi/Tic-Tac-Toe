@@ -1,131 +1,265 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
   View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Animated,
 } from 'react-native';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const P1 = 'Player 1';
+const P2 = 'Player 2';
+const CROSS = 'X';
+const ZERO = 'O';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+const App = () => {
+  const [Table, setTable] = useState([
+    ['', '', ''],
+    ['', '', ''],
+    ['', '', '']
+  ]);
+  const [chance, setChance] = useState(P1);
+  const [winner, setWinner] = useState('');
+  const [winningCells, setWinningCells] = useState<number[][]>([]);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+  const backgroundAnim = useRef(new Animated.Value(0)).current;
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  // Animate background when turn changes
+  useEffect(() => {
+    Animated.timing(backgroundAnim, {
+      toValue: chance === P1 ? 0 : 1,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [chance]);
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const bgColor = backgroundAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#e0f2fe', '#dcfce7'],
+  });
+
+  const handlePress = (cellIndex: number, rowIndex: number) => {
+    if (winner || Table[rowIndex][cellIndex] !== '') return;
+
+    const copyOfTable = [...Table];
+    copyOfTable[rowIndex][cellIndex] = chance === P1 ? CROSS : ZERO;
+    setTable(copyOfTable);
+    setChance(prev => (prev === P1 ? P2 : P1));
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  useEffect(() => {
+    const checkWin = () => {
+      // Row
+      for (let i = 0; i < 3; i++) {
+        if (
+          Table[i][0] === Table[i][1] &&
+          Table[i][0] === Table[i][2] &&
+          Table[i][0] !== ''
+        ) {
+          setWinner(chance === P1 ? P2 : P1);
+          setWinningCells([
+            [i, 0],
+            [i, 1],
+            [i, 2],
+          ]);
+          return;
+        }
+      }
+      // Column
+      for (let i = 0; i < 3; i++) {
+        if (
+          Table[0][i] === Table[1][i] &&
+          Table[0][i] === Table[2][i] &&
+          Table[0][i] !== ''
+        ) {
+          setWinner(chance === P1 ? P2 : P1);
+          setWinningCells([
+            [0, i],
+            [1, i],
+            [2, i],
+          ]);
+          return;
+        }
+      }
+      // Diagonal L->R
+      if (
+        Table[0][0] === Table[1][1] &&
+        Table[0][0] === Table[2][2] &&
+        Table[0][0] !== ''
+      ) {
+        setWinner(chance === P1 ? P2 : P1);
+        setWinningCells([
+          [0, 0],
+          [1, 1],
+          [2, 2],
+        ]);
+        return;
+      }
+      // Diagonal R->L
+      if (
+        Table[0][2] === Table[1][1] &&
+        Table[0][2] === Table[2][0] &&
+        Table[0][2] !== ''
+      ) {
+        setWinner(chance === P1 ? P2 : P1);
+        setWinningCells([
+          [0, 2],
+          [1, 1],
+          [2, 0],
+        ]);
+        return;
+      }
+
+      if (Table.flat().every(cell => cell !== '')) {
+        setWinner('Draw');
+      }
+    };
+
+    checkWin();
+  }, [Table]);
+
+  const handleReset = () => {
+    setTable([
+      ['', '', ''],
+      ['', '', ''],
+      ['', '', '']
+    ]);
+    setChance(P1);
+    setWinner('');
+    setWinningCells([]);
+  };
+
+  const isWinningCell = (row: number, col: number) =>
+    winningCells.some(([r, c]) => r === row && c === col);
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
+    <Animated.View style={[styles.container, { backgroundColor: bgColor }]}>
+      <Text style={styles.title}>Tic Tac Toe</Text>
+      <Text style={styles.turnText}>
+        {winner ? '' : `${chance}'s Turn`}
+      </Text>
+
+      <View style={styles.board}>
+        {Table.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.row}>
+            {row.map((cell, colIndex) => {
+              const scaleAnim = useRef(new Animated.Value(0)).current;
+
+              useEffect(() => {
+                if (cell !== '') {
+                  Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    friction: 4,
+                  }).start();
+                }
+              }, [cell]);
+
+              return (
+                <Pressable
+                  key={colIndex}
+                  onPress={() => handlePress(colIndex, rowIndex)}
+                  style={[
+                    styles.cell,
+                    isWinningCell(rowIndex, colIndex) && styles.winningCell,
+                  ]}
+                >
+                  <Animated.Text
+                    style={[
+                      styles.cellText,
+                      {
+                        transform: [{ scale: scaleAnim }],
+                      },
+                    ]}
+                  >
+                    {cell}
+                  </Animated.Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      {winner && (
+        <View style={styles.resultContainer}>
+          <Text style={styles.winnerText}>
+            {winner === 'Draw' ? 'Game is a Draw!' : `Winner: ${winner}`}
+          </Text>
+          <Pressable onPress={handleReset} style={styles.resetButton}>
+            <Text style={styles.resetButtonText}>Play Again</Text>
+          </Pressable>
         </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+      )}
+    </Animated.View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#111827',
   },
-  sectionDescription: {
-    marginTop: 8,
+  turnText: {
     fontSize: 18,
-    fontWeight: '400',
+    marginBottom: 16,
+    color: '#1f2937',
   },
-  highlight: {
-    fontWeight: '700',
+  board: {
+    marginBottom: 24,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  cell: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+    elevation: 3,
+  },
+  cellText: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  winningCell: {
+    backgroundColor: '#facc15', // yellow highlight
+  },
+  resultContainer: {
+    alignItems: 'center',
+  },
+  winnerText: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#10b981',
+  },
+  resetButton: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#3b82f6',
+    borderRadius: 10,
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontSize: 16,
   },
 });
 
 export default App;
+
+
+
+// niraj@fitistan.com
